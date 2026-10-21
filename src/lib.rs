@@ -96,14 +96,34 @@ impl JobServerGate {
         let from_env = unsafe { Client::from_env_ext(true) };
         let client = match from_env.client {
             Ok(client) => client,
-            Err(_) => {
+            Err(err) => {
+                if let Some((var_name, var_val)) = from_env.var
+                    && !matches!(
+                        err.kind(),
+                        jobserver::FromEnvErrorKind::NoJobserver
+                            | jobserver::FromEnvErrorKind::NoEnvVar
+                    )
+                {
+                    eprintln!(
+                        "warning: failed to connect to jobserver from environment variable `{}=\"{}\"`: {}",
+                        var_name,
+                        var_val.to_string_lossy(),
+                        err
+                    );
+                }
                 let limit = fallback_limit.unwrap_or_else(|| {
                     std::thread::available_parallelism()
                         .map(|n| n.get())
                         .unwrap_or(4)
                 });
                 let pipe_tokens = limit.saturating_sub(1);
-                Client::new(pipe_tokens)?
+                match Client::new(pipe_tokens) {
+                    Ok(client) => client,
+                    Err(err) => {
+                        eprintln!("warning: failed to create in-process jobserver: {err}");
+                        return Err(err);
+                    }
+                }
             }
         };
         Ok(Self::new(client))
@@ -187,6 +207,26 @@ pub fn reclaim_global() {
     if let Some(gate) = GLOBAL_GATE.get() {
         gate.reclaim_implicit_token();
     }
+}
+
+/// Initialize the process-wide global gate from environment variables or a fallback limit.
+///
+/// If connecting to or creating the jobserver fails, this emits any appropriate
+/// warnings to stderr and proceeds without initializing a global gate.
+pub fn init_from_env() {
+    let _ = unsafe { init_global_from_env_or_limit(None) };
+}
+
+/// Acquire a token from the global gate, blocking until one is available.
+///
+/// If token acquisition fails or no gate is initialized, this returns `None`.
+pub fn acquire() -> Option<JobToken<'static>> {
+    acquire_global()
+}
+
+/// Reclaim the donated implicit token from the global gate after a parallel phase.
+pub fn reclaim_implicit_token() {
+    reclaim_global();
 }
 
 #[cfg(test)]
