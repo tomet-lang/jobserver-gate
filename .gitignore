@@ -1,0 +1,11 @@
+# Build
+target/
+result
+result-*
+
+# Develop
+.direnv/
+.agents/workspaces/
+*.swp
+*~
+.DS_Store
