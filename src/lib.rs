@@ -182,7 +182,7 @@ pub fn init_global(gate: JobServerGate) -> Result<(), JobServerGate> {
     GLOBAL_GATE.set(gate)
 }
 
-/// Initialize the global gate from environment variables or a fallback limit.
+/// Initialize the global gate from environment variables or an explicit fallback limit.
 ///
 /// # Safety
 /// See [`JobServerGate::from_env_or_limit`].
@@ -192,24 +192,7 @@ pub unsafe fn init_global_from_env_or_limit(fallback_limit: Option<usize>) -> io
     Ok(())
 }
 
-/// Returns a reference to the process-wide global gate, if initialized.
-pub fn global() -> Option<&'static JobServerGate> {
-    GLOBAL_GATE.get()
-}
-
-/// Acquire a token from the global gate, if initialized.
-pub fn acquire_global() -> Option<JobToken<'static>> {
-    GLOBAL_GATE.get().and_then(|g| g.acquire().ok())
-}
-
-/// Reclaim the implicit token from the global gate, if initialized.
-pub fn reclaim_global() {
-    if let Some(gate) = GLOBAL_GATE.get() {
-        gate.reclaim_implicit_token();
-    }
-}
-
-/// Initialize the process-wide global gate from environment variables or a fallback limit.
+/// Initialize the process-wide global gate from environment variables or fallback to available parallelism.
 ///
 /// If connecting to or creating the jobserver fails, this emits any appropriate
 /// warnings to stderr and proceeds without initializing a global gate.
@@ -217,16 +200,23 @@ pub fn init_from_env() {
     let _ = unsafe { init_global_from_env_or_limit(None) };
 }
 
+/// Returns a reference to the process-wide global gate, if initialized.
+pub fn global() -> Option<&'static JobServerGate> {
+    GLOBAL_GATE.get()
+}
+
 /// Acquire a token from the global gate, blocking until one is available.
 ///
 /// If token acquisition fails or no gate is initialized, this returns `None`.
 pub fn acquire() -> Option<JobToken<'static>> {
-    acquire_global()
+    GLOBAL_GATE.get().and_then(|g| g.acquire().ok())
 }
 
 /// Reclaim the donated implicit token from the global gate after a parallel phase.
 pub fn reclaim_implicit_token() {
-    reclaim_global();
+    if let Some(gate) = GLOBAL_GATE.get() {
+        gate.reclaim_implicit_token();
+    }
 }
 
 #[cfg(test)]
