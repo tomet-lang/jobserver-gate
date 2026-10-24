@@ -9,6 +9,8 @@ repository = "https://github.com/tomet-lang/jobserver-gate"
 readme = "README.md"
 keywords = ["jobserver", "concurrency", "rayon", "parallel", "multithreading"]
 categories = ["concurrency", "development-tools"]
+# What catasto manages is for this repository, not for the published crate.
+exclude = ["catasto.ctmt", "catasto.lock", ".editorconfig", ".gitattributes"]
 
 [dependencies]
 jobserver = "0.1"
